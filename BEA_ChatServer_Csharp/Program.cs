@@ -13,11 +13,15 @@ namespace BEA_ChatServer_Csharp
 {
     class chatserver_ui
     {
+        static List<chatclient> ClientDB;
+
         public static int Main(String[] args)
         {
             bool running = true;
             bool working = false;
             Thread Listener = new Thread(listen);
+            ClientDB = new List<chatclient>();
+
 
             while (running)
             {
@@ -47,47 +51,140 @@ namespace BEA_ChatServer_Csharp
                     default: break;
                 }
             }
+            ClientDB.Clear();
             return 0;
         }
 
         private static void listen(Object obj)
         {
-            TcpListener serverSocket = new TcpListener(11000);
-            TcpClient clientSocket = default(TcpClient);
-            int clNo = 0;
-            int requestCount = 0;
-            byte[] bytesFrom = new byte[65536];
-            string dataFromClient = null;
-            Byte[] sendBytes = null;
-            string serverResponse = null;
-            string rCount = null;
-            requestCount = 0;
+            //TcpListener serverSocket = new TcpListener(11000);
+            //TcpClient clientSocket = default(TcpClient);
+            //int clNo = 0;
+            //int requestCount = 0;
+            //byte[] bytesFrom = new byte[65536];
+            //string dataFromClient = null;
+            //Byte[] sendBytes = null;
+            //string serverResponse = null;
+            //string rCount = null;
+            //requestCount = 0;
 
-            serverSocket.Start();
-            clientSocket = serverSocket.AcceptTcpClient();
+            //serverSocket.Start();
+            //clientSocket = serverSocket.AcceptTcpClient();
 
-            while ((true))
+            //while ((true))
+            //{
+            //    try
+            //    {
+            //        requestCount = requestCount + 1;
+            //        NetworkStream networkStream = clientSocket.GetStream();
+            //        networkStream.Read(bytesFrom, 0, (int)clientSocket.ReceiveBufferSize);
+            //        dataFromClient = System.Text.Encoding.ASCII.GetString(bytesFrom);
+            //        dataFromClient = dataFromClient.Substring(0, dataFromClient.IndexOf("$"));
+            //        Console.WriteLine(" >> " + "From client-" + clNo.ToString() + dataFromClient);
+
+            //        rCount = Convert.ToString(requestCount);
+            //        serverResponse = "Server to clinet(" + clNo + ") " + rCount;
+            //        sendBytes = Encoding.ASCII.GetBytes(serverResponse);
+            //        networkStream.Write(sendBytes, 0, sendBytes.Length);
+            //        networkStream.Flush();
+            //        Console.WriteLine(" >> " + serverResponse);
+            //    }
+            //    catch (Exception ex)
+            //    {
+            //        Console.WriteLine(" >> " + ex.ToString());
+            //    }
+            //}
+        }
+
+        void AddClient(String benutzername, Object connectdingens)
+        {
+            ClientDB.Add(new chatclient(benutzername, connectdingens));
+            Console.WriteLine("Client hinzugefügt: {0}", benutzername);
+        }
+
+        void RemoveClient(String IDS)
+        {
+            chatclient UserToDel =  ClientDB.Find(x => x.IDS == IDS));
+            String UsernameToDel = UserToDel.IDS;
+            ClientDB.Remove(UserToDel));
+            Console.WriteLine("Client entfernt: {0}", UsernameToDel);
+        }
+
+        void SendMsgToChannel(int Channel)
+        {
+            foreach(chatclient x in ClientDB)
             {
-                try
+                if(x.Channel == Channel)
                 {
-                    requestCount = requestCount + 1;
-                    NetworkStream networkStream = clientSocket.GetStream();
-                    networkStream.Read(bytesFrom, 0, (int)clientSocket.ReceiveBufferSize);
-                    dataFromClient = System.Text.Encoding.ASCII.GetString(bytesFrom);
-                    dataFromClient = dataFromClient.Substring(0, dataFromClient.IndexOf("$"));
-                    Console.WriteLine(" >> " + "From client-" + clNo.ToString() + dataFromClient);
+                    //sende text
+                }
+            }
+        }
 
-                    rCount = Convert.ToString(requestCount);
-                    serverResponse = "Server to clinet(" + clNo + ") " + rCount;
-                    sendBytes = Encoding.ASCII.GetBytes(serverResponse);
-                    networkStream.Write(sendBytes, 0, sendBytes.Length);
-                    networkStream.Flush();
-                    Console.WriteLine(" >> " + serverResponse);
-                }
-                catch (Exception ex)
+        //Benutzerdaten speicher Klasse
+        class chatclient
+        {
+            private String ids;
+            Object changeme;//irgendwas zum connecten, ip oder socket etc.
+            Int16 channel;
+            String username;
+
+            /* konstruktor */
+            public chatclient(String benutzername, Object connectdingens)
+            {
+                this.Username = benutzername;
+                changeme = connectdingens;
+                ids = hash(32);
+                Channel = 0; //lobby channel als default
+            }
+
+            public string Username
+            {
+                get
                 {
-                    Console.WriteLine(" >> " + ex.ToString());
+                    return username;
                 }
+                protected set
+                {
+                    username = value;
+                }
+            }
+
+            public string IDS
+            {
+                get
+                {
+                    return ids;
+                }
+
+                protected set
+                {
+                    ids = value;
+                }
+            }
+
+            public short Channel
+            {
+                get
+                {
+                    return channel;
+                }
+
+                set
+                {
+                    channel = value;
+                }
+            }
+
+            private string hash(int Länge)
+            {
+                string ret = string.Empty;
+                System.Text.StringBuilder SB = new System.Text.StringBuilder();
+                string Content = "1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvw!öäüÖÄÜß\"§$%&/()=?*#-";
+                Random rnd = new Random();
+                for (int i = 0; i < Länge; i++)
+                    SB.Append(Content[rnd.Next(Content.Length)]);
+                return SB.ToString();
             }
         }
     }
