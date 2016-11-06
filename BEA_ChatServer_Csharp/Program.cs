@@ -63,25 +63,41 @@ namespace BEA_ChatServer_Csharp
 
         private static void listen(Object obj)
         {
-            Console.Write("Starte Chatserver");
-            IPHostEntry hostEntry = Dns.GetHostEntry(Dns.GetHostName());
-            IPEndPoint endPoint = new IPEndPoint(hostEntry.AddressList[2], 11000);
+            while (true)
+            {
+                Console.Write("Starte Chatserver");
+                IPHostEntry hostEntry = Dns.GetHostEntry(Dns.GetHostName());
+                IPEndPoint endPoint = new IPEndPoint(hostEntry.AddressList[2], 11000);
 
-            Socket s = new Socket(endPoint.Address.AddressFamily,
-                SocketType.Dgram,
-                ProtocolType.Udp);
+                Socket s = new Socket(endPoint.Address.AddressFamily,
+                    SocketType.Dgram,
+                    ProtocolType.Udp);
 
-            // Creates an IpEndPoint to capture the identity of the sending host.
-            IPEndPoint sender = new IPEndPoint(IPAddress.Any, 0);
-            EndPoint senderRemote = (EndPoint)sender;
+                // Creates an IpEndPoint to capture the identity of the sending host.
+                IPEndPoint sender = new IPEndPoint(IPAddress.Any, 0);
+                EndPoint senderRemote = (EndPoint)sender;
 
-            // Binding is required with ReceiveFrom calls.
-            s.Bind(endPoint);
-            byte[] msg = new Byte[256];
-            Console.WriteLine("Waiting to receive datagrams from client...");
-            // This call blocks.  
-            s.ReceiveFrom(msg, 0, msg.Length, SocketFlags.None, ref senderRemote);
-            s.Close();
+                // Binding is required with ReceiveFrom calls.
+                s.Bind(endPoint);
+                byte[] msg = new Byte[256];
+                Console.WriteLine("Waiting to receive datagrams from client...");
+                // This call blocks.  
+                s.ReceiveFrom(msg, 0, msg.Length, SocketFlags.None, ref senderRemote);
+                s.Close();
+
+                Console.WriteLine(System.Text.Encoding.UTF8.GetString(msg).TrimEnd('\0'));
+                MsgToProcess MTP = new MsgToProcess();
+                MTP.Message = System.Text.Encoding.UTF8.GetString(msg).TrimEnd('\0');
+                ThreadPool.QueueUserWorkItem(new WaitCallback(ProcessMessage), MTP);
+            }
+        }
+
+        static void ProcessMessage(object obj)
+        {
+            MsgToProcess MTP = obj as MsgToProcess;
+            Console.WriteLine("Nachricht verarbeiten: {0}", MTP.Message);
+            Thread.Sleep(1000);
+            Console.WriteLine("Nachricht verarbeitet: {0}", MTP.Message);
         }
 
         void AddClient(String benutzername, Object connectdingens)
@@ -120,57 +136,57 @@ namespace BEA_ChatServer_Csharp
         //Benutzerdaten speicher Klasse
         class chatclient
         {
-            private String ids;
-            private Object changeme;//irgendwas zum connecten, ip oder socket etc.
-            private Int16 channel;
-            private String username;
+            public String IDS { get; private set; }
+            public Object changeme { get; private set; }//irgendwas zum connecten, ip oder socket etc.
+            public Int16 Channel { get; private set; }
+            private String Username;
 
             /* konstruktor */
             public chatclient(String benutzername, Object connectdingens)
             {
                 this.Username = benutzername;
                 changeme = connectdingens;
-                ids = hash(32);
+                IDS = hash(32);
                 Channel = 0; //lobby channel als default
             }
 
-            public string Username
-            {
-                get
-                {
-                    return username;
-                }
-                protected set
-                {
-                    username = value;
-                }
-            }
+            //public string Username
+            //{
+            //    get
+            //    {
+            //        return username;
+            //    }
+            //    protected set
+            //    {
+            //        username = value;
+            //    }
+            //}
 
-            public string IDS
-            {
-                get
-                {
-                    return ids;
-                }
+            //public string IDS
+            //{
+            //    get
+            //    {
+            //        return ids;
+            //    }
 
-                protected set
-                {
-                    ids = value;
-                }
-            }
+            //    protected set
+            //    {
+            //        ids = value;
+            //    }
+            //}
 
-            public short Channel
-            {
-                get
-                {
-                    return channel;
-                }
+            //public short Channel
+            //{
+            //    get
+            //    {
+            //        return channel;
+            //    }
 
-                protected set
-                {
-                    channel = value;
-                }
-            }
+            //    protected set
+            //    {
+            //        channel = value;
+            //    }
+            //}
 
             private string hash(int Länge)
             {
@@ -188,6 +204,11 @@ namespace BEA_ChatServer_Csharp
             private Int16 id;
             private String name;
         }
+
+        class MsgToProcess
+        {
+            public String Message { get; set; }
+        }
     }
 }
 
@@ -199,169 +220,169 @@ namespace BEA_ChatServer_Csharp
 
 
 
-    ////State object for reading client data asynchronously
-    //public class StateObject
-    //{
-    //    // Client  socket.
-    //    public Socket workSocket = null;
-    //    // Size of receive buffer.
-    //    public const int BufferSize = 1024;
-    //    // Receive buffer.
-    //    public byte[] buffer = new byte[BufferSize];
-    //    // Received data string.
-    //    public StringBuilder sb = new StringBuilder();
-    //}
+////State object for reading client data asynchronously
+//public class StateObject
+//{
+//    // Client  socket.
+//    public Socket workSocket = null;
+//    // Size of receive buffer.
+//    public const int BufferSize = 1024;
+//    // Receive buffer.
+//    public byte[] buffer = new byte[BufferSize];
+//    // Received data string.
+//    public StringBuilder sb = new StringBuilder();
+//}
 
-    //public class AsynchronousSocketListener
-    //{
-    //    // Thread signal.
-    //    public static ManualResetEvent allDone = new ManualResetEvent(false);
+//public class AsynchronousSocketListener
+//{
+//    // Thread signal.
+//    public static ManualResetEvent allDone = new ManualResetEvent(false);
 
-    //    public AsynchronousSocketListener()
-    //    {
-    //    }
+//    public AsynchronousSocketListener()
+//    {
+//    }
 
-    //    public static void StartListening()
-    //    {
-    //        int port = 11000;
-    //        // Data buffer for incoming data.
-    //        byte[] bytes = new Byte[1024];
+//    public static void StartListening()
+//    {
+//        int port = 11000;
+//        // Data buffer for incoming data.
+//        byte[] bytes = new Byte[1024];
 
-    //        // Establish the local endpoint for the socket.
-    //        // The DNS name of the computer
-    //        // running the listener is "host.contoso.com".
-    //        IPHostEntry ipHostInfo = Dns.Resolve(Dns.GetHostName());
-    //        IPAddress ipAddress = ipHostInfo.AddressList[0];
-    //        IPEndPoint localEndPoint = new IPEndPoint(ipAddress, port);
+//        // Establish the local endpoint for the socket.
+//        // The DNS name of the computer
+//        // running the listener is "host.contoso.com".
+//        IPHostEntry ipHostInfo = Dns.Resolve(Dns.GetHostName());
+//        IPAddress ipAddress = ipHostInfo.AddressList[0];
+//        IPEndPoint localEndPoint = new IPEndPoint(ipAddress, port);
 
-    //        // Create a TCP/IP socket.
-    //        Socket listener = new Socket(AddressFamily.InterNetwork,
-    //            SocketType.Stream, ProtocolType.Tcp);
+//        // Create a TCP/IP socket.
+//        Socket listener = new Socket(AddressFamily.InterNetwork,
+//            SocketType.Stream, ProtocolType.Tcp);
 
-    //        // Bind the socket to the local endpoint and listen for incoming connections.
-    //        try
-    //        {
-    //            listener.Bind(localEndPoint);
-    //            listener.Listen(100);
+//        // Bind the socket to the local endpoint and listen for incoming connections.
+//        try
+//        {
+//            listener.Bind(localEndPoint);
+//            listener.Listen(100);
 
-    //            while (true)
-    //            {
-    //                // Set the event to nonsignaled state.
-    //                allDone.Reset();
+//            while (true)
+//            {
+//                // Set the event to nonsignaled state.
+//                allDone.Reset();
 
-    //                // Start an asynchronous socket to listen for connections.
-    //                Console.WriteLine("Waiting for a connection...");
-    //                listener.BeginAccept(
-    //                    new AsyncCallback(AcceptCallback),
-    //                    listener);
+//                // Start an asynchronous socket to listen for connections.
+//                Console.WriteLine("Waiting for a connection...");
+//                listener.BeginAccept(
+//                    new AsyncCallback(AcceptCallback),
+//                    listener);
 
-    //                // Wait until a connection is made before continuing.
-    //                allDone.WaitOne();
-    //            }
+//                // Wait until a connection is made before continuing.
+//                allDone.WaitOne();
+//            }
 
-    //        }
-    //        catch (Exception e)
-    //        {
-    //            Console.WriteLine(e.ToString());
-    //        }
+//        }
+//        catch (Exception e)
+//        {
+//            Console.WriteLine(e.ToString());
+//        }
 
-    //        Console.WriteLine("\nPress ENTER to continue...");
-    //        Console.Read();
+//        Console.WriteLine("\nPress ENTER to continue...");
+//        Console.Read();
 
-    //    }
+//    }
 
-    //    public static void AcceptCallback(IAsyncResult ar)
-    //    {
-    //        // Signal the main thread to continue.
-    //        allDone.Set();
+//    public static void AcceptCallback(IAsyncResult ar)
+//    {
+//        // Signal the main thread to continue.
+//        allDone.Set();
 
-    //        // Get the socket that handles the client request.
-    //        Socket listener = (Socket)ar.AsyncState;
-    //        Socket handler = listener.EndAccept(ar);
+//        // Get the socket that handles the client request.
+//        Socket listener = (Socket)ar.AsyncState;
+//        Socket handler = listener.EndAccept(ar);
 
-    //        // Create the state object.
-    //        StateObject state = new StateObject();
-    //        state.workSocket = handler;
-    //        handler.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0,
-    //            new AsyncCallback(ReadCallback), state);
-    //    }
+//        // Create the state object.
+//        StateObject state = new StateObject();
+//        state.workSocket = handler;
+//        handler.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0,
+//            new AsyncCallback(ReadCallback), state);
+//    }
 
-    //    public static void ReadCallback(IAsyncResult ar)
-    //    {
-    //        String content = String.Empty;
+//    public static void ReadCallback(IAsyncResult ar)
+//    {
+//        String content = String.Empty;
 
-    //        // Retrieve the state object and the handler socket
-    //        // from the asynchronous state object.
-    //        StateObject state = (StateObject)ar.AsyncState;
-    //        Socket handler = state.workSocket;
+//        // Retrieve the state object and the handler socket
+//        // from the asynchronous state object.
+//        StateObject state = (StateObject)ar.AsyncState;
+//        Socket handler = state.workSocket;
 
-    //        // Read data from the client socket. 
-    //        int bytesRead = handler.EndReceive(ar);
+//        // Read data from the client socket. 
+//        int bytesRead = handler.EndReceive(ar);
 
-    //        if (bytesRead > 0)
-    //        {
-    //            // There  might be more data, so store the data received so far.
-    //            state.sb.Append(Encoding.ASCII.GetString(
-    //                state.buffer, 0, bytesRead));
+//        if (bytesRead > 0)
+//        {
+//            // There  might be more data, so store the data received so far.
+//            state.sb.Append(Encoding.ASCII.GetString(
+//                state.buffer, 0, bytesRead));
 
-    //            // Check for end-of-file tag. If it is not there, read 
-    //            // more data.
-    //            content = state.sb.ToString();
-    //            if (content.IndexOf("<EOF>") > -1)
-    //            {
-    //                // All the data has been read from the 
-    //                // client. Display it on the console.
-    //                Console.WriteLine("Read {0} bytes from socket. \n Data : {1}",
-    //                    content.Length, content);
-    //                // Echo the data back to the client.
-    //                Send(handler, content);
-    //            }
-    //            else
-    //            {
-    //                // Not all data received. Get more.
-    //                handler.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0,
-    //                new AsyncCallback(ReadCallback), state);
-    //            }
-    //        }
-    //    }
+//            // Check for end-of-file tag. If it is not there, read 
+//            // more data.
+//            content = state.sb.ToString();
+//            if (content.IndexOf("<EOF>") > -1)
+//            {
+//                // All the data has been read from the 
+//                // client. Display it on the console.
+//                Console.WriteLine("Read {0} bytes from socket. \n Data : {1}",
+//                    content.Length, content);
+//                // Echo the data back to the client.
+//                Send(handler, content);
+//            }
+//            else
+//            {
+//                // Not all data received. Get more.
+//                handler.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0,
+//                new AsyncCallback(ReadCallback), state);
+//            }
+//        }
+//    }
 
-    //    private static void Send(Socket handler, String data)
-    //    {
-    //        // Convert the string data to byte data using ASCII encoding.
-    //        byte[] byteData = Encoding.ASCII.GetBytes(data);
+//    private static void Send(Socket handler, String data)
+//    {
+//        // Convert the string data to byte data using ASCII encoding.
+//        byte[] byteData = Encoding.ASCII.GetBytes(data);
 
-    //        // Begin sending the data to the remote device.
-    //        handler.BeginSend(byteData, 0, byteData.Length, 0,
-    //            new AsyncCallback(SendCallback), handler);
-    //    }
+//        // Begin sending the data to the remote device.
+//        handler.BeginSend(byteData, 0, byteData.Length, 0,
+//            new AsyncCallback(SendCallback), handler);
+//    }
 
-    //    private static void SendCallback(IAsyncResult ar)
-    //    {
-    //        try
-    //        {
-    //            // Retrieve the socket from the state object.
-    //            Socket handler = (Socket)ar.AsyncState;
+//    private static void SendCallback(IAsyncResult ar)
+//    {
+//        try
+//        {
+//            // Retrieve the socket from the state object.
+//            Socket handler = (Socket)ar.AsyncState;
 
-    //            // Complete sending the data to the remote device.
-    //            int bytesSent = handler.EndSend(ar);
-    //            Console.WriteLine("Sent {0} bytes to client.", bytesSent);
+//            // Complete sending the data to the remote device.
+//            int bytesSent = handler.EndSend(ar);
+//            Console.WriteLine("Sent {0} bytes to client.", bytesSent);
 
-    //            handler.Shutdown(SocketShutdown.Both);
-    //            handler.Close();
+//            handler.Shutdown(SocketShutdown.Both);
+//            handler.Close();
 
-    //        }
-    //        catch (Exception e)
-    //        {
-    //            Console.WriteLine(e.ToString());
-    //        }
-    //    }
+//        }
+//        catch (Exception e)
+//        {
+//            Console.WriteLine(e.ToString());
+//        }
+//    }
 
 
-    //    public static int Main(String[] args)
-    //    {
-    //        StartListening();
-    //        return 0;
-    //    }
-    //}
+//    public static int Main(String[] args)
+//    {
+//        StartListening();
+//        return 0;
+//    }
+//}
 
-    //Class to handle each client request separatly
+//Class to handle each client request separatly
