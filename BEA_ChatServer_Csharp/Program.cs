@@ -29,11 +29,17 @@ namespace BEA_ChatServer_Csharp
                 Console.WriteLine("Chatserver v1.0");
                 Console.WriteLine("(C)Stephan Schuster");
                 Console.WriteLine("*******************");
+                Console.WriteLine("Chaträume:");
+                Console.WriteLine("0 - Lobby");
+                Console.WriteLine("*******************");
                 Console.WriteLine("0 - Programmende");
-                if(!working)
+                if (!working)
                     Console.WriteLine("1 - Starte Chatserver");
                 else
                     Console.WriteLine("1 - Stoppe Chatserver");
+                Console.WriteLine("2 - Chatraum hinzufügen");
+                Console.WriteLine("3 - Chatraum löschen");
+                Console.WriteLine("2 - Chatraum hinzufügen");
                 Console.WriteLine("*******************");
                 string antwort = Console.ReadLine();
                 switch (antwort)
@@ -57,43 +63,25 @@ namespace BEA_ChatServer_Csharp
 
         private static void listen(Object obj)
         {
-            //TcpListener serverSocket = new TcpListener(11000);
-            //TcpClient clientSocket = default(TcpClient);
-            //int clNo = 0;
-            //int requestCount = 0;
-            //byte[] bytesFrom = new byte[65536];
-            //string dataFromClient = null;
-            //Byte[] sendBytes = null;
-            //string serverResponse = null;
-            //string rCount = null;
-            //requestCount = 0;
+            Console.Write("Starte Chatserver");
+            IPHostEntry hostEntry = Dns.GetHostEntry(Dns.GetHostName());
+            IPEndPoint endPoint = new IPEndPoint(hostEntry.AddressList[2], 11000);
 
-            //serverSocket.Start();
-            //clientSocket = serverSocket.AcceptTcpClient();
+            Socket s = new Socket(endPoint.Address.AddressFamily,
+                SocketType.Dgram,
+                ProtocolType.Udp);
 
-            //while ((true))
-            //{
-            //    try
-            //    {
-            //        requestCount = requestCount + 1;
-            //        NetworkStream networkStream = clientSocket.GetStream();
-            //        networkStream.Read(bytesFrom, 0, (int)clientSocket.ReceiveBufferSize);
-            //        dataFromClient = System.Text.Encoding.ASCII.GetString(bytesFrom);
-            //        dataFromClient = dataFromClient.Substring(0, dataFromClient.IndexOf("$"));
-            //        Console.WriteLine(" >> " + "From client-" + clNo.ToString() + dataFromClient);
+            // Creates an IpEndPoint to capture the identity of the sending host.
+            IPEndPoint sender = new IPEndPoint(IPAddress.Any, 0);
+            EndPoint senderRemote = (EndPoint)sender;
 
-            //        rCount = Convert.ToString(requestCount);
-            //        serverResponse = "Server to clinet(" + clNo + ") " + rCount;
-            //        sendBytes = Encoding.ASCII.GetBytes(serverResponse);
-            //        networkStream.Write(sendBytes, 0, sendBytes.Length);
-            //        networkStream.Flush();
-            //        Console.WriteLine(" >> " + serverResponse);
-            //    }
-            //    catch (Exception ex)
-            //    {
-            //        Console.WriteLine(" >> " + ex.ToString());
-            //    }
-            //}
+            // Binding is required with ReceiveFrom calls.
+            s.Bind(endPoint);
+            byte[] msg = new Byte[256];
+            Console.WriteLine("Waiting to receive datagrams from client...");
+            // This call blocks.  
+            s.ReceiveFrom(msg, 0, msg.Length, SocketFlags.None, ref senderRemote);
+            s.Close();
         }
 
         void AddClient(String benutzername, Object connectdingens)
@@ -104,17 +92,25 @@ namespace BEA_ChatServer_Csharp
 
         void RemoveClient(String IDS)
         {
-            chatclient UserToDel =  ClientDB.Find(x => x.IDS == IDS));
+            chatclient UserToDel = ClientDB.Find(x => x.IDS == IDS);
             String UsernameToDel = UserToDel.IDS;
-            ClientDB.Remove(UserToDel));
+            ClientDB.Remove(UserToDel);
+            Console.WriteLine("Client entfernt: {0}", UsernameToDel);
+        }
+
+        void ClientSwitchChannel(String IDS, int ChannelId)
+        {
+            chatclient UserToDel = ClientDB.Find(x => x.IDS == IDS);
+            String UsernameToDel = UserToDel.IDS;
+            ClientDB.Remove(UserToDel);
             Console.WriteLine("Client entfernt: {0}", UsernameToDel);
         }
 
         void SendMsgToChannel(int Channel)
         {
-            foreach(chatclient x in ClientDB)
+            foreach (chatclient x in ClientDB)
             {
-                if(x.Channel == Channel)
+                if (x.Channel == Channel)
                 {
                     //sende text
                 }
@@ -125,9 +121,9 @@ namespace BEA_ChatServer_Csharp
         class chatclient
         {
             private String ids;
-            Object changeme;//irgendwas zum connecten, ip oder socket etc.
-            Int16 channel;
-            String username;
+            private Object changeme;//irgendwas zum connecten, ip oder socket etc.
+            private Int16 channel;
+            private String username;
 
             /* konstruktor */
             public chatclient(String benutzername, Object connectdingens)
@@ -170,7 +166,7 @@ namespace BEA_ChatServer_Csharp
                     return channel;
                 }
 
-                set
+                protected set
                 {
                     channel = value;
                 }
@@ -186,6 +182,11 @@ namespace BEA_ChatServer_Csharp
                     SB.Append(Content[rnd.Next(Content.Length)]);
                 return SB.ToString();
             }
+        }
+        class chatraum
+        {
+            private Int16 id;
+            private String name;
         }
     }
 }
