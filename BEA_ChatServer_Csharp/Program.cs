@@ -15,101 +15,130 @@ namespace BEA_ChatServer_Csharp
     {
         static List<chatclient> ClientDB;
         static Int16 port;
+        static IPEndPoint endPoint;
+        static UInt64 MsgSent = 0;
+        static UInt64 FramesReceived = 0;
+        static UInt64 FramesSent = 0;
+        static Thread Listener;
+        static bool working;
 
         public static int Main(String[] args)
         {
             bool running = true;
-            bool working = false;
-            Thread Listener = new Thread(listen);
+            working = false;
             ClientDB = new List<chatclient>();
 
             //wenn kein Port übergeben wurde, dann 11000 benutzen
             port = -1;
             if (args.Count() > 0)
                 Int16.TryParse(args[1], out port);
-            if(port == -1)
-                    port = 11000;
+            if (port == -1)
+                port = 11000;
+            IPHostEntry hostEntry = Dns.GetHostEntry(Dns.GetHostName());
+            endPoint = null;
 
-            while (running)
+            //nach einer IPv4 Adresse suchen
+            foreach (IPAddress ip in hostEntry.AddressList)
             {
-                Console.Clear();
-                Console.WriteLine("Chatserver v1.0");
-                Console.WriteLine("(C)Stephan Schuster");
-                Console.WriteLine("*******************");
-                //Console.WriteLine("Chaträume:");
-                //Console.WriteLine("0 - Lobby");
-                //Console.WriteLine("*******************");
-                Console.WriteLine("0 - Programmende");
-                if (!Listener.IsAlive)
-                    Console.WriteLine("1 - Starte Chatserver");
-                else
-                    Console.WriteLine("1 - Stoppe Chatserver");
-                Console.WriteLine("2 - Chatraum hinzufügen");
-                Console.WriteLine("*******************");
-                string antwort = Console.ReadLine();
-                switch (antwort)
+                if (ip.AddressFamily == AddressFamily.InterNetwork)
                 {
-                    case "0":
-                        {
-                            running = false;
-                            if(working)
-                                Listener.Abort();
-                            break;
-                        }
-                    case "1":
-                        {
-                            if (!Listener.IsAlive)
-                                Listener.Start();
-                            else
-                                Listener.Abort();
-                            break;
-                        }
-                    default: break;
+                    endPoint = new IPEndPoint(ip, port);
+                    break;
                 }
             }
-            ClientDB.Clear();
-            return 0;
-        }
 
-        private static void listen(Object obj)
-        {
-            Console.Write("Starte Chatserver");
-            while (true)
-            { 
-                IPHostEntry hostEntry = Dns.GetHostEntry(Dns.GetHostName());
-                IPEndPoint endPoint = null;
-
-                //nach einer IPv4 Adresse suchen
+            //nach einer IPv6 Adresse suchen
+            if (endPoint == null)
+            {
                 foreach (IPAddress ip in hostEntry.AddressList)
                 {
-                    if (ip.AddressFamily == AddressFamily.InterNetwork)
+                    if (ip.AddressFamily == AddressFamily.InterNetworkV6)
                     {
                         endPoint = new IPEndPoint(ip, port);
                         break;
                     }
                 }
+            }
 
-                //nach einer IPv6 Adresse suchen
-                if (endPoint == null)
+            if (endPoint == null)
+            {
+                //Server-Rechner hat keine IP-Adresse
+                //entweder keine aktive Netzwerkkarte oder irgendwas faul
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("[Fehler]:Dieser Rechner hat keine Verbindung zu einem Netzwerk");
+                return 1;
+            }
+
+            //System.Timers.Timer aTimer = new System.Timers.Timer();
+            //aTimer.Elapsed += OnTimedEvent;
+            //aTimer.Interval = 1000;
+            //aTimer.AutoReset = true;
+            //aTimer.Enabled = true;
+
+            while (running)
+            {
+                ausgabe();
+
+                string antwort = Console.ReadLine();
+                switch (antwort)
                 {
-                    foreach (IPAddress ip in hostEntry.AddressList)
-                    {
-                        if (ip.AddressFamily == AddressFamily.InterNetworkV6)
+                    case "0": //Programmende
                         {
-                            endPoint = new IPEndPoint(ip, port);
+                            running = false; //while schleife verlassen
+                            working = false; //Empfangsthread beenden
                             break;
                         }
-                    }
-                }
+                    case "1":
+                        {
 
-                if (endPoint == null)
-                {
-                    //Server-Rechner hat keine IP-Adresse
-                    //entweder keine aktive Netzwerkkarte oder irgendwas faul
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("[Fehler]:Dieser Rechner hat keine verbindung zu einem Netzwerk");
+                            if (!working)
+                            {
+                                working = true;
+                                Listener = new Thread(listen);
+                                Listener.IsBackground = true;
+                                Listener.Start();
+                            }
+                            else
+                                working = false;
+                            break;
+                        }
+                    default: break;
                 }
+            }
+            ClientDB.Clear(); //Aufräumen
+            return 0;
+        }
 
+        private static void ausgabe()
+        {
+            Console.Clear();
+            Console.WriteLine("*************************");
+            Console.WriteLine("* Chatserver v1.0       *");
+            Console.WriteLine("* (C)Stephan Schuster   *");
+            Console.WriteLine("*************************");
+            Console.WriteLine("Menü:");
+            Console.WriteLine("0 - Programmende");
+            if (Listener != null)
+                if (!Listener.IsAlive)
+                    Console.WriteLine("1 - Starte Chatserver");
+                else
+                    Console.WriteLine("1 - Stoppe Chatserver");
+            else
+                Console.WriteLine("1 - Starte Chatserver");
+            Console.WriteLine("*************************");
+            Console.WriteLine("Status:");
+            Console.WriteLine("angemeldete Clients: {0}", ClientDB.Count);
+            Console.WriteLine("gesendete Chatnachrichten: {0}", MsgSent);
+            Console.WriteLine("empfangene Rahmen: {0}", FramesReceived);
+            Console.WriteLine("gesendete Rahmen: {0}", FramesSent);
+            Console.WriteLine("*************************");
+        }
+
+        private static void listen(Object obj)
+        {
+            while (working)
+            {
+                Console.WriteLine("listener running");
                 Socket s = new Socket(endPoint.Address.AddressFamily,
                 SocketType.Dgram,
                 ProtocolType.Udp);
@@ -121,20 +150,22 @@ namespace BEA_ChatServer_Csharp
 
                 // Binding is required with ReceiveFrom calls.
                 s.Bind(endPoint);
-                byte[] msg = new Byte[1+32+256];
+                byte[] msg = new Byte[1 + 32 + 256];
                 //Console.WriteLine("Waiting to receive datagrams from client...");
                 // This call blocks.  
                 try
                 {
                     s.ReceiveFrom(msg, 0, msg.Length, SocketFlags.None, ref senderRemote);
-                    
+
                     Console.WriteLine(System.Text.Encoding.UTF8.GetString(msg).TrimEnd('\0'));
                     MsgToProcess MTP = new MsgToProcess();
                     MTP.Message = System.Text.Encoding.UTF8.GetString(msg).TrimEnd('\0');
                     MTP.IP = sender.Address;
                     ThreadPool.QueueUserWorkItem(new WaitCallback(ProcessMessage), MTP);
+                    FramesReceived++;
+                    ausgabe();
                 }
-                catch(System.Net.Sockets.SocketException)
+                catch (System.Net.Sockets.SocketException)
                 {
                     //innerhalb des Socket.ReceiveTimeout keine Nachricht empfangen
                     //nichts machen, einfach noch einen Loop in der While-Schleife
@@ -147,6 +178,12 @@ namespace BEA_ChatServer_Csharp
             }
         }
 
+        //Statusabfrage an angemeldete clients
+        //private static void OnTimedEvent(Object source, System.Timers.ElapsedEventArgs e)
+        //{
+        //    todo;
+        //}
+
         static void ProcessMessage(object obj)
         {
             MsgToProcess MTP = obj as MsgToProcess;
@@ -155,7 +192,7 @@ namespace BEA_ChatServer_Csharp
             String Argument1 = MTP.Message.Substring(1, 32);
             String Argument2 = MTP.Message.Substring(33, 256);
 
-            switch(Nachrichtentyp)
+            switch (Nachrichtentyp)
             {
                 case "A":
                     {
@@ -219,14 +256,11 @@ namespace BEA_ChatServer_Csharp
             Console.WriteLine("Client entfernt: {0}", UsernameToDel);
         }
 
-        static void SendMsgToChannel(int Channel)
+        static void SendMsgToClients(int Channel)
         {
             foreach (chatclient x in ClientDB)
             {
-                if (x.Channel == Channel)
-                {
                     //sende text
-                }
             }
         }
 
