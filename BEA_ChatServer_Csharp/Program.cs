@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Timers;
 //using System.Threading.Tasks;
 
 using System.Net.Sockets;
@@ -14,13 +15,16 @@ namespace BEA_ChatServer_Csharp
     class chatserver_ui
     {
         static List<chatclient> ClientDB;
-        static Int16 port;
-        static IPEndPoint endPoint;
+        //static Int16 port;
+        static IPEndPoint ServerEP = null;
         static UInt64 MsgSent = 0;
         static UInt64 FramesReceived = 0;
         static UInt64 FramesSent = 0;
         static Thread Listener;
         static bool working;
+        static Socket s_listen;
+        static int sendport = 11001;
+        static int recport = 11000;
 
         public static int Main(String[] args)
         {
@@ -28,39 +32,19 @@ namespace BEA_ChatServer_Csharp
             working = false;
             ClientDB = new List<chatclient>();
 
-            //wenn kein Port übergeben wurde, dann 11000 benutzen
-            port = -1;
-            if (args.Count() > 0)
-                Int16.TryParse(args[1], out port);
-            if (port == -1)
-                port = 11000;
             IPHostEntry hostEntry = Dns.GetHostEntry(Dns.GetHostName());
-            endPoint = null;
 
             //nach einer IPv4 Adresse suchen
             foreach (IPAddress ip in hostEntry.AddressList)
             {
                 if (ip.AddressFamily == AddressFamily.InterNetwork)
                 {
-                    endPoint = new IPEndPoint(ip, port);
+                    ServerEP = new IPEndPoint(ip, recport);
                     break;
                 }
             }
 
-            //nach einer IPv6 Adresse suchen
-            if (endPoint == null)
-            {
-                foreach (IPAddress ip in hostEntry.AddressList)
-                {
-                    if (ip.AddressFamily == AddressFamily.InterNetworkV6)
-                    {
-                        endPoint = new IPEndPoint(ip, port);
-                        break;
-                    }
-                }
-            }
-
-            if (endPoint == null)
+            if (ServerEP == null)
             {
                 //Server-Rechner hat keine IP-Adresse
                 //entweder keine aktive Netzwerkkarte oder irgendwas faul
@@ -68,12 +52,6 @@ namespace BEA_ChatServer_Csharp
                 Console.WriteLine("[Fehler]:Dieser Rechner hat keine Verbindung zu einem Netzwerk");
                 return 1;
             }
-
-            //System.Timers.Timer aTimer = new System.Timers.Timer();
-            //aTimer.Elapsed += OnTimedEvent;
-            //aTimer.Interval = 1000;
-            //aTimer.AutoReset = true;
-            //aTimer.Enabled = true;
 
             while (running)
             {
@@ -94,12 +72,25 @@ namespace BEA_ChatServer_Csharp
                             if (!working)
                             {
                                 working = true;
+                                s_listen = new Socket(ServerEP.Address.AddressFamily,
+                                    SocketType.Dgram,
+                                    ProtocolType.Udp);
+                                //IPEndPoint ListenerEP = new IPEndPoint(IPAddress.Parse("192.168.178.20"), 11000);
+                                s_listen.Bind(ServerEP);
                                 Listener = new Thread(listen);
                                 Listener.IsBackground = true;
                                 Listener.Start();
+                                System.Timers.Timer StatusTimer = new System.Timers.Timer(30000);
+                                StatusTimer.Elapsed += OnTimedEvent;
+                                StatusTimer.AutoReset = true;
+                                StatusTimer.Enabled = true;
                             }
                             else
+                            {
                                 working = false;
+                                if (s_listen != null)
+                                    s_listen.Close();
+                            }
                             break;
                         }
                     default: break;
@@ -136,53 +127,52 @@ namespace BEA_ChatServer_Csharp
 
         private static void listen(Object obj)
         {
+            Console.WriteLine("listener running - lausche auf {0}:{1}", ServerEP.Address, ServerEP.Port);
             while (working)
             {
-                Console.WriteLine("listener running");
-                Socket s = new Socket(endPoint.Address.AddressFamily,
-                SocketType.Dgram,
-                ProtocolType.Udp);
-                s.ReceiveTimeout = 1000;
-
                 // Creates an IpEndPoint to capture the identity of the sending host.
                 IPEndPoint sender = new IPEndPoint(IPAddress.Any, 0);
                 EndPoint senderRemote = (EndPoint)sender;
 
-                // Binding is required with ReceiveFrom calls.
-                s.Bind(endPoint);
+                //s.Bind(ServerEP);
                 byte[] msg = new Byte[1 + 32 + 256];
                 //Console.WriteLine("Waiting to receive datagrams from client...");
                 // This call blocks.  
-                try
-                {
-                    s.ReceiveFrom(msg, 0, msg.Length, SocketFlags.None, ref senderRemote);
+                s_listen.ReceiveFrom(msg, 0, msg.Length, SocketFlags.None, ref senderRemote);
 
-                    Console.WriteLine(System.Text.Encoding.UTF8.GetString(msg).TrimEnd('\0'));
-                    MsgToProcess MTP = new MsgToProcess();
-                    MTP.Message = System.Text.Encoding.UTF8.GetString(msg).TrimEnd('\0');
-                    MTP.IP = sender.Address;
-                    ThreadPool.QueueUserWorkItem(new WaitCallback(ProcessMessage), MTP);
-                    FramesReceived++;
-                    ausgabe();
-                }
-                catch (System.Net.Sockets.SocketException)
-                {
-                    //innerhalb des Socket.ReceiveTimeout keine Nachricht empfangen
-                    //nichts machen, einfach noch einen Loop in der While-Schleife
-                }
-                finally
-                {
-                    //socket immer schließen
-                    s.Close();
-                }
+                Console.WriteLine(System.Text.Encoding.UTF8.GetString(msg).TrimEnd('\0'));
+                MsgToProcess MTP = new MsgToProcess();
+                MTP.Message = System.Text.Encoding.UTF8.GetString(msg).TrimEnd('\0');
+                MTP.EP = (IPEndPoint)senderRemote;
+                ThreadPool.QueueUserWorkItem(new WaitCallback(ProcessMessage), MTP);
+                FramesReceived++;
+                ausgabe();
             }
         }
 
         //Statusabfrage an angemeldete clients
-        //private static void OnTimedEvent(Object source, System.Timers.ElapsedEventArgs e)
-        //{
-        //    todo;
-        //}
+        private static void OnTimedEvent(Object source, System.Timers.ElapsedEventArgs e)
+        {
+            Socket s = new Socket(AddressFamily.InterNetwork,
+            SocketType.Dgram,
+            ProtocolType.Udp);
+            //allen angemeldeten clients eine Statusabfrage schicken
+            foreach (chatclient user in ClientDB)
+            {
+                if (user.Retry >= 4)
+                    ClientDB.Remove(user);
+                else
+                {
+                    byte[] msg = Encoding.ASCII.GetBytes("S" + user.IDS.PadRight(32) + "".PadRight(256));
+                    IPEndPoint statusEP = new IPEndPoint(user.EP.Address, sendport);
+                    s.SendTo(msg, statusEP);
+                    //s.SendTo(msg, ClientEP);
+                    user.Retry++;
+                }
+            }
+            s.Close();
+            Console.WriteLine("statusanfrage an {0} cients gesendet.", ClientDB.Count);
+        }
 
         static void ProcessMessage(object obj)
         {
@@ -199,7 +189,9 @@ namespace BEA_ChatServer_Csharp
                         //Client anmelden
                         //Argument1 = Benutzername
                         //Argument2 = leer
-                        AddClient(Argument1, MTP.IP);
+                        chatclient user = AddClient(Argument1, MTP.EP);
+                        String msg = "A" + user.IDS.PadRight(32) + "".PadRight(256);
+                        SendMsgToClient(msg, user.EP);
                         break;
                     }
                 case "Q":
@@ -211,11 +203,15 @@ namespace BEA_ChatServer_Csharp
                 case "T":
                     {
                         //Textnachricht empfangen
+                        //Argument1 = IDS
+                        //Argument2 = Textnachricht
+                        SendMsgToClients(Argument1, Argument2);
                         break;
                     }
                 case "S":
                     {
                         //Clientstatus empfangen
+                        SetClientActive(Argument1);
                         break;
                     }
                 case "U":
@@ -234,33 +230,64 @@ namespace BEA_ChatServer_Csharp
             Console.WriteLine("Nachricht verarbeitet: {0}", MTP.Message);
         }
 
-        static void AddClient(String benutzername, IPAddress ip)
+        static chatclient AddClient(String benutzername, IPEndPoint ep)
         {
-            ClientDB.Add(new chatclient(benutzername, ip));
+            ClientDB.Add(new chatclient(benutzername, ep));
             Console.WriteLine("Client hinzugefügt: {0}", benutzername);
+            //hier raceconditions möglich, aber bei so einem kleinem chatserver
+            //ignoriere ich das mal. soviele clients werden sich nicht gleichzeitig anmelden
+            return (ClientDB.Last());
         }
 
         static void RemoveClient(String IDS)
         {
             chatclient UserToDel = ClientDB.Find(x => x.IDS == IDS);
-            String UsernameToDel = UserToDel.IDS;
-            ClientDB.Remove(UserToDel);
-            Console.WriteLine("Client entfernt: {0}", UsernameToDel);
-        }
-
-        static void ClientSwitchChannel(String IDS, int ChannelId)
-        {
-            chatclient UserToDel = ClientDB.Find(x => x.IDS == IDS);
-            String UsernameToDel = UserToDel.IDS;
-            ClientDB.Remove(UserToDel);
-            Console.WriteLine("Client entfernt: {0}", UsernameToDel);
-        }
-
-        static void SendMsgToClients(int Channel)
-        {
-            foreach (chatclient x in ClientDB)
+            if (UserToDel != null)
             {
-                    //sende text
+                String UsernameToDel = UserToDel.IDS;
+                ClientDB.Remove(UserToDel);
+            }
+        }
+
+        static void SetClientActive(String IDS)
+        {
+            chatclient UserToProcess = ClientDB.Find(x => x.IDS == IDS);
+            if (UserToProcess != null)
+                UserToProcess.Retry = 0;
+            Console.WriteLine("statusmeldung empfangen");
+        }
+
+        static void SendMsgToClient(String Msg, IPEndPoint ClientEP)
+        {
+            Socket s = new Socket(AddressFamily.InterNetwork,
+                SocketType.Dgram,
+                ProtocolType.Udp);
+
+            byte[] msg = Encoding.ASCII.GetBytes(Msg);
+            IPEndPoint sendeEP = new IPEndPoint(ClientEP.Address, sendport);
+            s.SendTo(msg, sendeEP);
+            //s.SendTo(msg, ClientEP);
+            s.Close();
+        }
+
+        static void SendMsgToClients(String IDS, String Msg)
+        {
+            chatclient Sender = ClientDB.Find(x => x.IDS == IDS);
+            if (Sender != null)
+            {
+                //sender bekannt
+                Socket s = new Socket(AddressFamily.InterNetwork,
+                SocketType.Dgram,
+                ProtocolType.Udp);
+
+                byte[] msg = Encoding.ASCII.GetBytes("T" + Sender.Username.PadRight(32) + Msg.PadRight(256));
+                for (int i = 0; i < ClientDB.Count; i++)
+                {
+                    IPEndPoint testEP = new IPEndPoint(ClientDB[i].EP.Address, sendport);
+                    s.SendTo(msg, testEP);
+                    //s.SendTo(msg, ClientEP);
+                }
+                s.Close();
             }
         }
 
@@ -268,40 +295,35 @@ namespace BEA_ChatServer_Csharp
         class chatclient
         {
             public String IDS { get; private set; }
-            public IPAddress IP { get; private set; }
-            public Int16 Channel { get; private set; }
-            private String Username;
+            public IPEndPoint EP { get; private set; }
+            public String Username { get; private set; }
+            public UInt16 Retry { get; set; }
 
             /* konstruktor */
-            public chatclient(String benutzername, IPAddress ip_adress)
+            public chatclient(String benutzername, IPEndPoint endpoint)
             {
                 this.Username = benutzername;
-                IP = ip_adress;
+                EP = endpoint;
                 IDS = hash(32);
-                Channel = 0; //lobby channel als default
+                Retry = 0;
             }
 
             private string hash(int Länge)
             {
                 string ret = string.Empty;
                 System.Text.StringBuilder SB = new System.Text.StringBuilder();
-                string Content = "1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvw!öäüÖÄÜß\"§$%&/()=?*#-";
+                string Content = "1234567890ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvw";
                 Random rnd = new Random();
                 for (int i = 0; i < Länge; i++)
                     SB.Append(Content[rnd.Next(Content.Length)]);
                 return SB.ToString();
             }
         }
-        class chatraum
-        {
-            private Int16 id;
-            private String name;
-        }
 
         class MsgToProcess
         {
             public String Message { get; set; }
-            public IPAddress IP { get; set; }
+            public IPEndPoint EP { get; set; }
         }
     }
 }
