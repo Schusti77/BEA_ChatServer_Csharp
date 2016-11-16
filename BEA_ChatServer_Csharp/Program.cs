@@ -12,7 +12,7 @@ using System.Net.Sockets;
 
 namespace BEA_ChatServer_Csharp
 {
-    class chatserver_ui
+    class chatserver
     {
         static List<chatclient> ClientDB;
         //static Int16 port;
@@ -163,7 +163,7 @@ namespace BEA_ChatServer_Csharp
                     ClientDB.Remove(user);
                 else
                 {
-                    byte[] msg = Encoding.ASCII.GetBytes("S" + user.IDS.PadRight(32) + "".PadRight(256));
+                    byte[] msg = Encoding.ASCII.GetBytes("S" + user.IDS.PadRight(32) + ClientDB.Count.ToString().PadRight(256));
                     IPEndPoint statusEP = new IPEndPoint(user.EP.Address, sendport);
                     s.SendTo(msg, statusEP);
                     //s.SendTo(msg, ClientEP);
@@ -171,17 +171,14 @@ namespace BEA_ChatServer_Csharp
                 }
             }
             s.Close();
-            Console.WriteLine("statusanfrage an {0} cients gesendet.", ClientDB.Count);
         }
 
         static void ProcessMessage(object obj)
         {
             MsgToProcess MTP = obj as MsgToProcess;
-            Console.WriteLine("Nachricht verarbeiten: {0}", MTP.Message);
             String Nachrichtentyp = MTP.Message.Substring(0, 1);
             String Argument1 = MTP.Message.Substring(1, 32);
             String Argument2 = MTP.Message.Substring(33, 256);
-
             switch (Nachrichtentyp)
             {
                 case "A":
@@ -206,6 +203,8 @@ namespace BEA_ChatServer_Csharp
                         //Argument1 = IDS
                         //Argument2 = Textnachricht
                         SendMsgToClients(Argument1, Argument2);
+                        MsgSent++;
+                        ausgabe();
                         break;
                     }
                 case "S":
@@ -217,6 +216,7 @@ namespace BEA_ChatServer_Csharp
                 case "U":
                     {
                         //Benutzernamen angefragt
+                        SendUserNames(Argument1, MTP.EP);
                         break;
                     }
                 default:
@@ -226,14 +226,11 @@ namespace BEA_ChatServer_Csharp
                         break;
                     }
             }
-
-            Console.WriteLine("Nachricht verarbeitet: {0}", MTP.Message);
         }
 
         static chatclient AddClient(String benutzername, IPEndPoint ep)
         {
             ClientDB.Add(new chatclient(benutzername, ep));
-            Console.WriteLine("Client hinzugefügt: {0}", benutzername);
             //hier raceconditions möglich, aber bei so einem kleinem chatserver
             //ignoriere ich das mal. soviele clients werden sich nicht gleichzeitig anmelden
             return (ClientDB.Last());
@@ -254,7 +251,6 @@ namespace BEA_ChatServer_Csharp
             chatclient UserToProcess = ClientDB.Find(x => x.IDS == IDS);
             if (UserToProcess != null)
                 UserToProcess.Retry = 0;
-            Console.WriteLine("statusmeldung empfangen");
         }
 
         static void SendMsgToClient(String Msg, IPEndPoint ClientEP)
@@ -268,6 +264,8 @@ namespace BEA_ChatServer_Csharp
             s.SendTo(msg, sendeEP);
             //s.SendTo(msg, ClientEP);
             s.Close();
+            FramesSent++;
+            ausgabe();
         }
 
         static void SendMsgToClients(String IDS, String Msg)
@@ -276,18 +274,25 @@ namespace BEA_ChatServer_Csharp
             if (Sender != null)
             {
                 //sender bekannt
-                Socket s = new Socket(AddressFamily.InterNetwork,
-                SocketType.Dgram,
-                ProtocolType.Udp);
-
-                byte[] msg = Encoding.ASCII.GetBytes("T" + Sender.Username.PadRight(32) + Msg.PadRight(256));
                 for (int i = 0; i < ClientDB.Count; i++)
                 {
-                    IPEndPoint testEP = new IPEndPoint(ClientDB[i].EP.Address, sendport);
-                    s.SendTo(msg, testEP);
-                    //s.SendTo(msg, ClientEP);
+                    String Nachricht = "T" + Sender.Username.PadRight(32) + Msg.PadRight(256);
+                    SendMsgToClient(Nachricht, new IPEndPoint(ClientDB[i].EP.Address, sendport));
                 }
-                s.Close();
+            }
+        }
+
+        static void SendUserNames(String IDS, IPEndPoint ep)
+        {
+            chatclient Sender = ClientDB.Find(x => x.IDS == IDS);
+            if (Sender != null)
+            {
+                //sender bekannt
+                for (int i = 0; i < ClientDB.Count; i++)
+                {
+                    String Nachricht = "U" + ClientDB[i].Username.PadRight(32) + "".PadRight(256);
+                    SendMsgToClient(Nachricht, ep);
+                }
             }
         }
 
