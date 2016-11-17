@@ -128,25 +128,29 @@ namespace BEA_ChatServer_Csharp
         private static void listen(Object obj)
         {
             Console.WriteLine("listener running - lausche auf {0}:{1}", ServerEP.Address, ServerEP.Port);
+            // Creates an IpEndPoint to capture the identity of the sending host.
+            IPEndPoint sender = new IPEndPoint(IPAddress.Any, 0);
+            EndPoint senderRemote = (EndPoint)sender;
+            byte[] msg = new Byte[1 + 32 + 256];
+
             while (working)
             {
-                // Creates an IpEndPoint to capture the identity of the sending host.
-                IPEndPoint sender = new IPEndPoint(IPAddress.Any, 0);
-                EndPoint senderRemote = (EndPoint)sender;
+                try
+                {
+                    s_listen.ReceiveFrom(msg, 0, msg.Length, SocketFlags.None, ref senderRemote);
 
-                //s.Bind(ServerEP);
-                byte[] msg = new Byte[1 + 32 + 256];
-                //Console.WriteLine("Waiting to receive datagrams from client...");
-                // This call blocks.  
-                s_listen.ReceiveFrom(msg, 0, msg.Length, SocketFlags.None, ref senderRemote);
-
-                Console.WriteLine(System.Text.Encoding.UTF8.GetString(msg).TrimEnd('\0'));
-                MsgToProcess MTP = new MsgToProcess();
-                MTP.Message = System.Text.Encoding.UTF8.GetString(msg).TrimEnd('\0');
-                MTP.EP = (IPEndPoint)senderRemote;
-                ThreadPool.QueueUserWorkItem(new WaitCallback(ProcessMessage), MTP);
-                FramesReceived++;
-                ausgabe();
+                    Console.WriteLine(System.Text.Encoding.UTF8.GetString(msg).TrimEnd('\0'));
+                    MsgToProcess MTP = new MsgToProcess();
+                    MTP.Message = System.Text.Encoding.UTF8.GetString(msg).TrimEnd('\0');
+                    MTP.EP = (IPEndPoint)senderRemote;
+                    ThreadPool.QueueUserWorkItem(new WaitCallback(ProcessMessage), MTP);
+                    FramesReceived++;
+                    ausgabe();
+                }
+                catch(SocketException e)
+                {
+                    Console.WriteLine("SocketException aufgetreten. Errorcode: {0}, Fehlermeldung: {1}", e.ErrorCode, e.Message);
+                }
             }
         }
 
@@ -157,17 +161,20 @@ namespace BEA_ChatServer_Csharp
             SocketType.Dgram,
             ProtocolType.Udp);
             //allen angemeldeten clients eine Statusabfrage schicken
-            foreach (chatclient user in ClientDB)
+            if (ClientDB.Count > 0)
             {
-                if (user.Retry >= 4)
-                    ClientDB.Remove(user);
-                else
+                foreach (chatclient user in ClientDB)
                 {
-                    byte[] msg = Encoding.ASCII.GetBytes("S" + user.IDS.PadRight(32) + ClientDB.Count.ToString().PadRight(256));
-                    IPEndPoint statusEP = new IPEndPoint(user.EP.Address, sendport);
-                    s.SendTo(msg, statusEP);
-                    //s.SendTo(msg, ClientEP);
-                    user.Retry++;
+                    if (user.Retry >= 4)
+                        ClientDB.Remove(user);
+                    else
+                    {
+                        byte[] msg = Encoding.ASCII.GetBytes("S" + user.IDS.PadRight(32) + ClientDB.Count.ToString().PadRight(256));
+                        IPEndPoint statusEP = new IPEndPoint(user.EP.Address, sendport);
+                        s.SendTo(msg, statusEP);
+                        //s.SendTo(msg, ClientEP);
+                        user.Retry++;
+                    }
                 }
             }
             s.Close();
